@@ -1,0 +1,17 @@
+name: rfid_mqtt_app
+description: Um app para comunicação com dispositivos via MQTT e armazenamento local.
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.2
+  uuid: ^4.0.0
+  sqflite_common_ffi: ^2.3.4+4
+  path_provider: ^2.1.2
+  mqtt_client: ^10.0.0
+
+flutter:
+  uses-material-design: true
