@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'mqtt_service.dart';
 
@@ -18,18 +19,11 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class UserCard {
-  final String name;
-  final String uid;
-
-  UserCard({required this.name, required this.uid});
-}
-
 class Message {
   final String uid;
-  final String userName;
+  final String? userName;
 
-  Message({required this.uid, required this.userName});
+  Message({required this.uid, this.userName});
 }
 
 class MqttScreen extends StatefulWidget {
@@ -41,13 +35,11 @@ class MqttScreen extends StatefulWidget {
 
 class _MqttScreenState extends State<MqttScreen> {
   final MqttService mqttService = MqttService();
-
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _uidController = TextEditingController();
 
-  final List<UserCard> _users = [];
   final List<Message> _messages = [];
-
+  final Map<String, String> _userMap = {}; // uid_card -> nome
   String? _latestUid;
 
   @override
@@ -55,15 +47,18 @@ class _MqttScreenState extends State<MqttScreen> {
     super.initState();
     mqttService.connect((message) {
       setState(() {
-        _latestUid = message;
-        _uidController.text = message;
+        try {
+          final data = jsonDecode(message);
+          final uidCard = data['uid_card'];
+          _latestUid = uidCard;
+          _uidController.text = uidCard;
 
-        final user = _users.firstWhere(
-          (u) => u.uid == message,
-          orElse: () => UserCard(name: 'Desconhecido', uid: message),
-        );
+          final userName = _userMap[uidCard] ?? 'Desconhecido';
 
-        _messages.insert(0, Message(uid: message, userName: user.name));
+          _messages.insert(0, Message(uid: uidCard, userName: userName));
+        } catch (e) {
+          print('Erro ao decodificar mensagem: $e');
+        }
       });
     });
   }
@@ -74,17 +69,15 @@ class _MqttScreenState extends State<MqttScreen> {
 
     if (name.isEmpty || uid == null) return;
 
-    // Verifica se o UID já está cadastrado
-    final exists = _users.any((user) => user.uid == uid);
-    if (exists) {
+    if (_userMap.containsKey(uid)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Esse cartão já está cadastrado!')),
+        const SnackBar(content: Text('Este cartão já está cadastrado!')),
       );
       return;
     }
 
     setState(() {
-      _users.add(UserCard(name: name, uid: uid));
+      _userMap[uid] = name;
       _nameController.clear();
       _uidController.clear();
       _latestUid = null;
@@ -113,7 +106,7 @@ class _MqttScreenState extends State<MqttScreen> {
               child: Row(
                 children: [
                   SizedBox(
-                    width: 200,
+                    width: 250,
                     child: TextField(
                       controller: _nameController,
                       decoration: const InputDecoration(
@@ -124,7 +117,7 @@ class _MqttScreenState extends State<MqttScreen> {
                   ),
                   const SizedBox(width: 16),
                   SizedBox(
-                    width: 200,
+                    width: 250,
                     child: TextField(
                       readOnly: true,
                       controller: _uidController,
@@ -150,27 +143,28 @@ class _MqttScreenState extends State<MqttScreen> {
             /// Tabela de mensagens recebidas
             Expanded(
               child: _messages.isEmpty
-                  ? const Center(child: Text('Nenhuma mensagem recebida ainda.'))
+                  ? const Center(
+                      child: Text('Nenhuma mensagem recebida ainda.'))
                   : SingleChildScrollView(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey[800]!),
-                          dataRowColor: MaterialStateColor.resolveWith((states) => Colors.grey[900]!),
-                          columns: const [
-                            DataColumn(label: Text('ID')),
-                            DataColumn(label: Text('UID do Cartão')),
-                            DataColumn(label: Text('Usuário')),
-                          ],
-                          rows: List.generate(_messages.length, (index) {
-                            final msg = _messages[index];
-                            return DataRow(cells: [
-                              DataCell(Text('${index + 1}')),
-                              DataCell(Text(msg.uid)),
-                              DataCell(Text(msg.userName)),
-                            ]);
-                          }),
-                        ),
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: MaterialStateColor.resolveWith(
+                            (states) => Colors.grey[800]!),
+                        dataRowColor: MaterialStateColor.resolveWith(
+                            (states) => Colors.grey[900]!),
+                        columns: const [
+                          DataColumn(label: Text('ID')),
+                          DataColumn(label: Text('UID do Cartão')),
+                          DataColumn(label: Text('Usuário')),
+                        ],
+                        rows: List.generate(_messages.length, (index) {
+                          final msg = _messages[index];
+                          return DataRow(cells: [
+                            DataCell(Text('${index + 1}')),
+                            DataCell(Text(msg.uid)),
+                            DataCell(Text(_userMap[msg.uid] ?? 'Desconhecido')),
+                          ]);
+                        }),
                       ),
                     ),
             ),
